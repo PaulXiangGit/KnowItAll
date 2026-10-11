@@ -9,7 +9,7 @@
 | 状态 | IN_PROGRESS |
 | 建议周期 | 6—8 周 |
 | 默认技术栈 | Python 3.12、FastAPI、LangGraph、Pydantic |
-| 默认数据底座 | PostgreSQL、pgvector、MinIO、Redis Streams |
+| 默认数据底座 | PostgreSQL、pgvector、本地文件对象存储、Redis Streams |
 | 主要使用者 | 产品、前端、后端、测试、项目管理 |
 | 上位设计 | `docs/business-analysis-agent/technical-design.html` |
 
@@ -87,7 +87,7 @@
 - PostgreSQL：业务实体、元数据、关系边、ACL、会话、记忆、任务和审计。
 - PostgreSQL FTS：第一阶段全文索引，支持字段名、接口名、错误码和关键词搜索。
 - pgvector：历史需求、技术文档、评审内容与代码注释的语义召回。
-- MinIO：不可变源文件、附件、解析产物和大体积证据。
+- LocalObjectStore：本地保存不可变源文件、附件、解析产物和大体积证据；通过 ObjectStore Port 保留 S3/OSS/COS 替换能力。
 - Redis Streams：后台任务与索引事件；通过 Queue Port 保留未来迁移 Kafka 的能力。
 
 ### 5.3 关键约束
@@ -110,7 +110,7 @@
 
 - 建立 `apps/api`、`apps/worker` 和核心 Python package。
 - 配置 FastAPI、LangGraph、Pydantic 和依赖管理。
-- 提供 PostgreSQL、pgvector、MinIO、Redis 的 Docker Compose。
+- 提供 PostgreSQL、pgvector、Redis 的 Docker Compose；对象数据默认写入本地 `.data/objects`。
 - 建立统一配置、Secret 加载、结构化日志和错误模型。
 - 增加 lint、format、type check、unit test 和 migration 命令。
 - 提供健康检查、readiness 和版本信息接口。
@@ -188,7 +188,7 @@
 
 **任务：**
 
-- 实现原件入 MinIO、解析、标准化和切片。
+- 实现原件通过 ObjectStore Port 写入本地文件存储、解析、标准化和切片。
 - 实现确定性实体抽取和强标识对齐。
 - 实现基础关系：DESCRIBES、HAS_FIELD、IMPLEMENTS、CALLS、REFERENCES、AFFECTS。
 - 建立 Evidence Envelope，保存段落、JSON Pointer、文件与行号定位。
@@ -367,7 +367,7 @@ T02～T10 → T11 → T12
 - LangGraph Agent Runtime
 - 索引 Worker
 - PostgreSQL/pgvector 数据模型与迁移
-- MinIO 原件存储适配器
+- LocalObjectStore 原件存储适配器和可替换的 ObjectStore Port
 - Redis Streams 任务适配器
 - 文档、OpenAPI、Git 连接器
 - 混合检索与关系查询服务

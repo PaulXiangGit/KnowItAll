@@ -11,7 +11,7 @@ KnowItAll 是一个面向产品、前端、后端、测试和项目管理角色�
 - LangGraph
 - Pydantic
 - PostgreSQL + pgvector
-- MinIO
+- 本地文件对象存储（默认）；S3 兼容存储可选
 - Redis Streams
 
 ## 本地启动
@@ -41,7 +41,13 @@ make install
 make infra-up
 ```
 
-该命令默认使用本机的 `docker-compose`，启动 PostgreSQL/pgvector、Redis 和 MinIO。使用 Docker Compose v2 时执行：
+如需提前拉取固定版本镜像，可执行：
+
+```bash
+make infra-pull
+```
+
+Makefile 会自动选择本机可用的 `docker compose` v2 或 `docker-compose` v1，仅启动 PostgreSQL/pgvector 和 Redis。原始文件与解析产物默认保存在 `.data/objects`，不要求安装 MinIO。如需显式指定 Compose 命令，可以执行：
 
 ```bash
 make infra-up COMPOSE="docker compose -f compose.yaml"
@@ -64,14 +70,15 @@ API 默认监听 `127.0.0.1:8000`，支持代码热更新。启动后访问：
 - 健康检查：[http://127.0.0.1:8000/health](http://127.0.0.1:8000/health)
 - 就绪检查：[http://127.0.0.1:8000/ready](http://127.0.0.1:8000/ready)
 - OpenAPI：[http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
-- MinIO 控制台：[http://127.0.0.1:9001](http://127.0.0.1:9001)
 
-MinIO 本地开发账号来自 `.env.example`：
+也可以不安装本地 Python 依赖，直接用 Docker 一次启动 API、PostgreSQL 和 Redis：
 
-```text
-用户名：knowitall
-密码：change-me
+```bash
+make up
+make status
 ```
+
+查看 API 日志使用 `make logs`，停止全部容器使用 `make down`。
 
 ### 4. 验证分析接口
 
@@ -112,7 +119,7 @@ make infra-down
 
 ### 仅启动 API
 
-当前 API 骨架尚未实际连接数据库。如果暂时不需要 PostgreSQL、Redis 和 MinIO，可以跳过 `make infra-up`，直接执行：
+当前 API 骨架尚未实际连接数据库。如果暂时不需要 PostgreSQL 和 Redis，可以跳过 `make infra-up`，直接执行：
 
 ```bash
 make dev
@@ -122,7 +129,8 @@ make dev
 
 - `docker-compose: command not found`：使用 `make infra-up COMPOSE="docker compose -f compose.yaml"`。
 - `Cannot connect to the Docker daemon`：先启动 Docker Desktop。
-- `Address already in use`：检查本机的 8000、5432、6379、9000、9001 端口。
+- 出现 `pull access denied for minio/minio`：更新到当前 Compose 配置后重新执行 `make infra-up`。MinIO 已从默认依赖中移除；遗留的空 `knowitall_knowitall-minio` volume 不会被使用，可以暂时保留。
+- `Address already in use`：检查本机的 8000、5432、6379 端口。
 - PyCharm 显示依赖无法导入：按下一节将解释器切换到项目 `.venv/bin/python`。
 
 ## PyCharm 配置
