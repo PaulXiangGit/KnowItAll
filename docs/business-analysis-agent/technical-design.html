@@ -1,0 +1,727 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="KnowItAll 全链路业务分析 Agent 技术设计：Hybrid Knowledge Architecture、证据链、Agent 编排与开源部署。">
+  <title>KnowItAll｜全链路业务分析 Agent 技术设计</title>
+  <style>
+    :root {
+      --ink: #14213d;
+      --muted: #5f6b7a;
+      --line: #dfe6ee;
+      --paper: #ffffff;
+      --soft: #f5f8fb;
+      --navy: #102a43;
+      --blue: #1261a0;
+      --cyan: #22a6b3;
+      --green: #17875d;
+      --amber: #b86b00;
+      --red: #b43b45;
+      --shadow: 0 14px 40px rgba(16, 42, 67, .09);
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: #eef3f7;
+      font: 15px/1.75 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+    a { color: var(--blue); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    code { padding: .12rem .32rem; background: #edf3f8; border-radius: 4px; font-size: .92em; }
+    .hero {
+      color: white;
+      background:
+        radial-gradient(circle at 82% 15%, rgba(34,166,179,.38), transparent 28%),
+        linear-gradient(135deg, #0b2035 0%, #123d60 58%, #0c6f78 100%);
+      padding: 70px max(24px, calc((100vw - 1180px) / 2)) 62px;
+    }
+    .eyebrow { color: #8de0e7; letter-spacing: .12em; font-weight: 750; text-transform: uppercase; }
+    h1 { max-width: 900px; margin: 12px 0 16px; font-size: clamp(34px, 5vw, 62px); line-height: 1.1; letter-spacing: -.04em; }
+    .hero p { max-width: 920px; margin: 0; color: #d8e9f1; font-size: 18px; }
+    .hero-meta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 28px; }
+    .pill { border: 1px solid rgba(255,255,255,.3); background: rgba(255,255,255,.09); border-radius: 999px; padding: 6px 12px; }
+    .layout { display: grid; grid-template-columns: 260px minmax(0, 1fr); max-width: 1280px; margin: 0 auto; }
+    nav { position: sticky; top: 0; align-self: start; height: 100vh; overflow: auto; padding: 34px 24px; border-right: 1px solid var(--line); background: #f8fafc; }
+    nav strong { display: block; margin-bottom: 10px; color: var(--navy); }
+    nav a { display: block; color: #526272; padding: 5px 0; font-size: 14px; }
+    nav a:hover { color: var(--blue); text-decoration: none; }
+    main { min-width: 0; background: var(--paper); padding: 36px 52px 80px; }
+    section { scroll-margin-top: 24px; padding: 30px 0; border-bottom: 1px solid var(--line); }
+    section:last-child { border-bottom: 0; }
+    h2 { margin: 0 0 18px; color: var(--navy); font-size: 28px; line-height: 1.25; }
+    h3 { margin: 26px 0 10px; color: #163d5c; font-size: 20px; }
+    h4 { margin: 18px 0 8px; font-size: 16px; }
+    p { margin: 8px 0 14px; }
+    .lead { font-size: 18px; color: #334e68; }
+    .callout { margin: 18px 0; padding: 16px 18px; border-left: 4px solid var(--cyan); background: #edf9fa; border-radius: 0 8px 8px 0; }
+    .warning { border-left-color: var(--amber); background: #fff8e8; }
+    .decision { border-left-color: var(--green); background: #edf9f3; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin: 16px 0; }
+    .grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .card { padding: 18px; border: 1px solid var(--line); border-radius: 10px; background: #fff; box-shadow: 0 5px 18px rgba(16,42,67,.04); }
+    .card h3, .card h4 { margin-top: 0; }
+    .card p:last-child { margin-bottom: 0; }
+    .num { display: inline-grid; place-items: center; width: 28px; height: 28px; margin-right: 8px; color: white; background: var(--blue); border-radius: 7px; font-weight: 800; }
+    table { width: 100%; margin: 16px 0 24px; border-collapse: collapse; font-size: 14px; }
+    th, td { padding: 11px 12px; border: 1px solid var(--line); text-align: left; vertical-align: top; }
+    th { color: var(--navy); background: #edf3f8; }
+    tr:nth-child(even) td { background: #fbfcfd; }
+    ul, ol { padding-left: 22px; }
+    li { margin: 5px 0; }
+    .arch { margin: 20px 0; padding: 20px; border-radius: 12px; background: #102a43; box-shadow: var(--shadow); overflow-x: auto; }
+    .layer { display: grid; grid-template-columns: 150px 1fr; min-width: 700px; margin: 8px 0; border: 1px solid rgba(255,255,255,.18); border-radius: 8px; overflow: hidden; }
+    .layer b { display: grid; place-items: center; padding: 13px; color: white; background: rgba(255,255,255,.08); }
+    .layer span { padding: 13px 16px; color: #d9e9f1; }
+    .flow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 14px 0; }
+    .flow span { padding: 8px 11px; border: 1px solid #bdd0df; border-radius: 7px; background: #f6f9fb; }
+    .flow i { color: var(--blue); font-style: normal; font-weight: 800; }
+    pre { overflow: auto; margin: 14px 0; padding: 16px; color: #e3edf4; background: #122b3f; border-radius: 9px; line-height: 1.55; }
+    .tag { display: inline-block; margin: 2px 4px 2px 0; padding: 2px 7px; border-radius: 5px; color: #14506b; background: #e8f5f8; font-size: 12px; font-weight: 700; }
+    .status { font-weight: 750; }
+    .yes { color: var(--green); }
+    .maybe { color: var(--amber); }
+    .no { color: var(--red); }
+    .small { color: var(--muted); font-size: 13px; }
+    .footer { color: #6b7c8d; text-align: center; padding-top: 34px; }
+    @media (max-width: 900px) {
+      .layout { display: block; }
+      nav { position: relative; height: auto; padding: 20px 24px; border-right: 0; border-bottom: 1px solid var(--line); columns: 2; }
+      nav strong { column-span: all; }
+      main { padding: 24px; }
+      .grid, .grid.three { grid-template-columns: 1fr; }
+    }
+    @media print {
+      body { background: white; }
+      nav { display: none; }
+      .layout { display: block; }
+      main { padding: 20px; }
+      section { break-inside: avoid; }
+      .hero { padding: 38px; }
+    }
+  </style>
+</head>
+<body>
+  <header class="hero">
+    <div class="eyebrow">KnowItAll · Technical Design v0.1</div>
+    <h1>全链路业务分析 Agent<br>技术设计</h1>
+    <p>面向产品、前端、后端、测试与项目管理角色，连接需求、页面、接口、服务、代码、数据表、埋点、实验、发布与历史文档，在评审、方案、影响分析、排障和复盘中给出可验证、可追溯、有权限边界的结论。</p>
+    <div class="hero-meta">
+      <span class="pill">Hybrid Knowledge Architecture</span>
+      <span class="pill">Evidence-first</span>
+      <span class="pill">LangGraph + FastAPI</span>
+      <span class="pill">Open-source & One-click Deploy</span>
+      <span class="pill">2026-10-11</span>
+    </div>
+  </header>
+
+  <div class="layout">
+    <nav aria-label="目录">
+      <strong>目录</strong>
+      <a href="#position">1. 产品定位与目标</a>
+      <a href="#principles">2. 设计原则</a>
+      <a href="#architecture">3. 总体五层架构</a>
+      <a href="#foundation">4. 数据底座与技术选型</a>
+      <a href="#model">5. 统一知识模型</a>
+      <a href="#pipeline">6. 数据接入与索引流水线</a>
+      <a href="#orchestration">7. Agent 编排设计</a>
+      <a href="#chains">8. 核心链路示例</a>
+      <a href="#api">9. API 与服务边界</a>
+      <a href="#evidence">10. 置信度与证据机制</a>
+      <a href="#security">11. 权限、安全与治理</a>
+      <a href="#deployment">12. 开源与一键部署</a>
+      <a href="#observability">13. 可观测性与评测</a>
+      <a href="#roadmap">14. 实施路线与决策</a>
+    </nav>
+
+    <main>
+      <section id="position">
+        <h2>1. 产品定位与目标</h2>
+        <p class="lead">KnowItAll 不是“会聊天的文档搜索”，而是一个围绕业务变更建立事实链路、执行多源分析、输出证据化结论的业务分析 Agent。</p>
+        <div class="grid three">
+          <div class="card"><h3>面向角色</h3><p>产品经理、前端、后端、测试、数据、SRE、项目经理及技术负责人。</p></div>
+          <div class="card"><h3>核心任务</h3><p>需求评审、技术方案、影响面分析、故障排查、事故复盘、历史相似性检索。</p></div>
+          <div class="card"><h3>输出标准</h3><p>结论、影响对象、证据、时间/版本、置信度、不确定项和下一步动作。</p></div>
+        </div>
+
+        <h3>目标场景</h3>
+        <ol>
+          <li>识别一个产品需求影响的前端页面、组件、路由与用户入口。</li>
+          <li>解释一个页面依赖的后端接口、协议、服务、数据库表与缓存。</li>
+          <li>分析接口或字段变更对产品能力、页面、埋点、实验和下游服务的影响。</li>
+          <li>查找与当前需求相似的历史需求、事故、技术方案和评审结论。</li>
+          <li>为排障推荐日志、指标、链路、发布记录、开关与配置的检查顺序。</li>
+          <li>审查需求/技术方案是否缺失关键字段、状态流、权限、异常态、埋点、监控或灰度策略。</li>
+        </ol>
+        <p><strong>非目标：</strong>首期不替代 Jira、Git、监控等源系统，不把模型推断写回为事实，不在无审批时执行生产变更，也不承诺仅凭文档回答所有代码级问题。</p>
+      </section>
+
+      <section id="principles">
+        <h2>2. 设计原则</h2>
+        <div class="callout warning"><strong>关键约束：</strong>RAG 只负责召回非结构化上下文，不作为唯一数据底座。业务实体、依赖关系、版本事实、权限与可追溯链路必须由可查询、可约束、可审计的数据结构承载。</div>
+        <div class="grid">
+          <div class="card"><h3>事实与文本分离</h3><p>“接口 A 在版本 V 包含字段 F”是版本事实；“方案文档讨论了字段 F”是文本证据。两者存储、更新和置信度不同。</p></div>
+          <div class="card"><h3>来源优先于结论</h3><p>任何高影响结论都能回到源系统、版本、文件路径、行号、文档段落、查询时间或观测窗口。</p></div>
+          <div class="card"><h3>时间是一等公民</h3><p>关系和属性均支持 <code>valid_from</code>/<code>valid_to</code>、采集时间和版本，避免拿当前事实解释历史事故。</p></div>
+          <div class="card"><h3>确定性查询优先</h3><p>精确 ID、字段、依赖和版本先走结构化/全文/图查询；语义模糊问题再用向量召回和模型推理。</p></div>
+          <div class="card"><h3>权限随数据传播</h3><p>检索结果取调用者权限交集；派生实体、切片、向量和答案继承源数据 ACL 与敏感级别。</p></div>
+          <div class="card"><h3>可替换基础设施</h3><p>通过 Storage Port、Connector SDK、Tool Protocol 隔离厂商能力，默认发行版简单，规模化部署可平滑替换。</p></div>
+        </div>
+      </section>
+
+      <section id="architecture">
+        <h2>3. 总体五层架构</h2>
+        <div class="arch" role="img" aria-label="KnowItAll 五层架构">
+          <div class="layer"><b>交互与治理层</b><span>Web / Chat / IDE / API · 证据面板 · 人工确认 · 权限 · 审计 · 反馈与知识修正</span></div>
+          <div class="layer"><b>Agent 编排层</b><span>LangGraph 状态图 · 意图路由 · 查询计划 · 工具调用 · 多跳推理 · 证据合成 · interrupt 人工确认</span></div>
+          <div class="layer"><b>混合存储层</b><span>PostgreSQL · 关系图/图数据库 · OpenSearch · pgvector/Qdrant · S3/MinIO · AST/符号索引</span></div>
+          <div class="layer"><b>知识加工层</b><span>解析 · 标准化 · 实体对齐 · 关系抽取 · 版本化 · 证据切片 · Embedding · 质量校验</span></div>
+          <div class="layer"><b>数据接入层</b><span>Jira · 飞书/企微 · Git · OpenAPI · DB Schema · 日志/APM · 监控 · 发布单 · 工单 · 评审记录</span></div>
+        </div>
+        <h3>横切能力</h3>
+        <p><span class="tag">Tenant / Project Scope</span><span class="tag">Business Line Scope</span><span class="tag">ACL</span><span class="tag">Temporal Versioning</span><span class="tag">Lineage</span><span class="tag">Observability</span><span class="tag">Evaluation</span><span class="tag">Secrets</span></p>
+        <p>系统采用事件驱动的索引更新：连接器生成标准化变更事件，知识加工 Worker 幂等消费并更新各索引；在线查询不直接依赖源系统可用性，敏感实时查询除外。</p>
+      </section>
+
+      <section id="foundation">
+        <h2>4. 数据底座与技术选型</h2>
+        <p class="lead">建议采用“逻辑多存储、默认少组件”的策略：能力上完整覆盖，开源默认部署尽量收敛到 PostgreSQL + OpenSearch + MinIO；规模扩大后再拆出专用图数据库和向量数据库。</p>
+
+        <h3>4.1 存储职责</h3>
+        <table>
+          <thead><tr><th>数据能力</th><th>承载内容</th><th>必须支持</th><th>禁止作为</th></tr></thead>
+          <tbody>
+            <tr><td><strong>关系数据库</strong></td><td>租户、项目、数据源、稳定业务实体、版本、同步任务、ACL、审计、反馈</td><td>事务、唯一约束、版本化、行级过滤</td><td>大规模全文或深层图遍历的唯一引擎</td></tr>
+            <tr><td><strong>关系图/图数据库</strong></td><td>需求→页面→组件→接口→服务→代码→表→指标/埋点/实验的有向、带类型、带版本关系</td><td>多跳遍历、路径解释、边证据、时间切片</td><td>原始文档与大对象仓库</td></tr>
+            <tr><td><strong>全文索引</strong></td><td>字段名、接口名、错误码、埋点名、类/方法名、配置键及文档正文</td><td>精确词、前缀、模糊、中文分词、字段权重</td><td>事实主库</td></tr>
+            <tr><td><strong>向量索引</strong></td><td>历史需求、技术方案、评审记录、事故复盘、代码注释等语义切片</td><td>metadata filter、混合召回、模型版本隔离</td><td>实体身份、权限、版本事实的唯一来源</td></tr>
+            <tr><td><strong>对象存储</strong></td><td>源文档快照、附件、解析中间物、仓库归档、原始日志样本</td><td>不可变版本、内容哈希、生命周期、加密</td><td>低延迟查询引擎</td></tr>
+            <tr><td><strong>代码索引</strong></td><td>AST、符号、引用、调用、路由、ORM、配置、SQL 映射</td><td>语言插件、commit 绑定、文件/行级定位</td><td>仅靠 Embedding 猜测调用关系</td></tr>
+          </tbody>
+        </table>
+
+        <h3>4.2 推荐选型矩阵</h3>
+        <table>
+          <thead><tr><th>能力</th><th>默认开源发行版</th><th>规模化选项</th><th>建议与取舍</th></tr></thead>
+          <tbody>
+            <tr><td>关系数据库</td><td><strong>PostgreSQL 16+</strong></td><td>云托管 PostgreSQL</td><td><span class="status yes">推荐</span>。生态成熟，可承载 JSONB、行级安全、递归 CTE 和 pgvector。</td></tr>
+            <tr><td>图关系</td><td><strong>PostgreSQL 邻接表</strong>（nodes/edges）</td><td>ArangoDB / Neo4j / Memgraph</td><td>MVP 用关系图减少组件；当 3+ 跳遍历 p95、图规模或图算法成为瓶颈时迁移。图层必须通过统一接口访问。</td></tr>
+            <tr><td>全文索引</td><td><strong>OpenSearch</strong></td><td>Elasticsearch</td><td>中文、精确字段、多字段权重和检索解释更完整；小型体验模式可退化为 PostgreSQL FTS。</td></tr>
+            <tr><td>向量索引</td><td><strong>pgvector</strong></td><td>Qdrant / Milvus</td><td>首期与元数据事务靠近；向量超千万、QPS 或多向量检索需求上升后拆分。所有结果仍回查 ACL。</td></tr>
+            <tr><td>对象存储</td><td><strong>MinIO</strong></td><td>S3 / OSS / COS</td><td>S3 兼容接口，保存不可变原件与派生物；数据库只保存 URI、hash、版本与 ACL。</td></tr>
+            <tr><td>代码索引</td><td><strong>Tree-sitter + ripgrep + 自建符号表</strong></td><td>SCIP/LSIF + Zoekt</td><td>先支持 Java/Go/TS/Python；语法级关系来自解析器，文本搜索与语义搜索作为补充。</td></tr>
+            <tr><td>事件与任务</td><td><strong>Redis Streams + Worker</strong></td><td>Kafka / Pulsar</td><td>一键部署简单；吞吐、保留与多消费者要求提升时再换消息总线。</td></tr>
+          </tbody>
+        </table>
+        <div class="callout decision"><strong>建议定案：</strong>社区版默认 Profile 使用 PostgreSQL + pgvector + OpenSearch + MinIO + Redis；“Lite Profile”仅使用 PostgreSQL + pgvector + MinIO，适合试用；“Scale Profile”可增加 ArangoDB/Neo4j、Qdrant 和 Kafka。三种 Profile 共享同一领域模型和 Storage Port。</div>
+
+        <h3>4.3 何时需要专用图数据库</h3>
+        <ul>
+          <li>线上分析频繁执行 4—8 跳、双向、带路径约束的遍历；</li>
+          <li>边数量达到数亿，关系查询 p95 无法通过索引和预计算满足目标；</li>
+          <li>需要中心性、社区发现、最短路径等图算法；</li>
+          <li>图谱探索成为核心交互，而非回答生成的辅助能力。</li>
+        </ul>
+
+        <h3>4.4 ArangoDB Community 可行性评估</h3>
+        <p><strong>结论：可以作为 KnowItAll 的图关系存储，但建议定位为可选 Graph Adapter，而不是开源默认发行版的强依赖。</strong></p>
+        <table>
+          <thead><tr><th>维度</th><th>判断</th><th>对 KnowItAll 的含义</th></tr></thead>
+          <tbody>
+            <tr><td>图模型</td><td><span class="status yes">适合</span></td><td>Vertex/Edge Document 可自然表达带属性、版本和证据引用的实体关系；一条边可保存 <code>valid_from</code>、<code>valid_to</code>、<code>confidence</code> 和 <code>evidence_ids</code>。</td></tr>
+            <tr><td>查询能力</td><td><span class="status yes">适合</span></td><td>AQL 支持定深/变深遍历、DFS/BFS/加权遍历、剪枝、最短路径与路径枚举，可覆盖影响面、上下游依赖和证据路径查询。</td></tr>
+            <tr><td>多模型</td><td><span class="status yes">有价值</span></td><td>Document 与 Graph 共用 AQL，便于把实体元数据和边放在同一引擎；但 PostgreSQL 仍是租户、任务、ACL、审计等事务事实的主库。</td></tr>
+            <tr><td>全文能力</td><td><span class="status maybe">可用但不替代</span></td><td>ArangoSearch 支持 BM25、精确/前缀/模糊等查询；为保持字段检索扩展性和存储可替换性，默认仍由 Search Port 对接 OpenSearch。</td></tr>
+            <tr><td>事务边界</td><td><span class="status maybe">需约束</span></td><td>Community 集群中的多 collection ACID 能力存在版本/功能边界；图写入采用幂等事件和最终一致，不设计跨 PostgreSQL、ArangoDB 的分布式事务。</td></tr>
+            <tr><td>许可证</td><td><span class="status no">默认发行风险</span></td><td>3.12 起源码采用 BSL 1.1；Community 预编译软件另受 Community License 约束。官方协议限定内部业务使用、聚合数据集低于 100GB，并限制转让、再分发或以独立方式提供。不能把“Community”直接等同于 OSI 开源。</td></tr>
+            <tr><td>一键部署</td><td><span class="status maybe">可选安装</span></td><td>KnowItAll 仓库可提供 adapter、配置和用户自备镜像的部署说明；是否可直接捆绑/再分发镜像应由项目维护者做许可证审查，不能仅凭技术方案认定。</td></tr>
+          </tbody>
+        </table>
+
+        <h4>建议的集成边界</h4>
+        <ul>
+          <li>实现 <code>GraphPort</code>：<code>upsertNode</code>、<code>upsertEdge</code>、<code>closeRevision</code>、<code>neighbors</code>、<code>paths</code>、<code>impact</code> 和 <code>subgraph</code>；Agent 不直接生成 AQL。</li>
+          <li>使用独立 database/collection 隔离租户或在所有文档中强制携带 <code>tenant_id</code>，并由服务端编译查询条件；不可依赖模型补充租户过滤。</li>
+          <li>顶点 collection 按稳定实体类型或统一 <code>entities</code> 建模，边按关系域拆分；具体拆分由基准测试决定，领域层不暴露 collection 名。</li>
+          <li>PostgreSQL outbox 驱动 ArangoDB 幂等写入，边使用确定性 key；记录 <code>knowledge_revision</code>，支持重放、核对和全量重建。</li>
+          <li>版本选择和许可证校验进入发布清单；商业生产使用前重新核对当时适用条款，并保留 PostgreSQL/其他图实现的迁移出口。</li>
+        </ul>
+        <p class="small">核对依据（访问于 2026-10-11）：<a href="https://docs.arangodb.com/3.12/about-arangodb/features/community-edition/">ArangoDB 3.12 Community Edition 功能说明</a>、<a href="https://arangodb.com/wp-content/uploads/2024/05/ADB-Community-License_31OCT2023.pdf">ArangoDB Community Edition License Agreement</a>、<a href="https://arangodb.com/2023/10/evolving-arangodbs-licensing-model-for-a-sustainable-future/">ArangoDB 许可证变更说明</a>。许可证结论需由法律顾问确认，本节不构成法律意见。</p>
+
+        <h3>4.5 默认应用与 Agent 中间件</h3>
+        <div class="callout decision"><strong>默认技术栈：</strong>Python 3.12 + FastAPI + LangGraph。FastAPI 是对外服务与安全边界，LangGraph 是进程内 Agent 编排引擎；领域服务、检索和存储通过 Port/Adapter 调用，不把业务规则写死在 Graph Node 中。</div>
+        <table>
+          <thead><tr><th>组件</th><th>默认职责</th><th>边界</th></tr></thead>
+          <tbody>
+            <tr><td><strong>FastAPI</strong></td><td>REST API、SSE 流式事件、请求校验、依赖注入、OIDC 身份上下文、租户/业务线作用域、限流和 OpenAPI</td><td>不承担长时工作流状态，不直接拼接底层查询，不在路由函数中实现 Agent 推理</td></tr>
+            <tr><td><strong>LangGraph</strong></td><td>有状态工作流、条件路由、并行工具节点、重试、checkpoint、暂停/恢复及 human-in-the-loop</td><td>不作为事实库或业务记忆库；Graph State 仅保存运行所需的原始状态和引用</td></tr>
+            <tr><td><strong>Pydantic</strong></td><td>API DTO、Graph State、QueryPlan、EvidenceItem、Tool I/O 的 Schema 与校验</td><td>领域实体持久化模型与外部 DTO 分离</td></tr>
+            <tr><td><strong>Uvicorn</strong></td><td>开发和单实例 ASGI Server</td><td>生产多副本由容器编排和反向代理处理</td></tr>
+            <tr><td><strong>Worker</strong></td><td>连接器同步、解析、Embedding、索引重建和长时后台任务</td><td>不阻塞 FastAPI 请求进程；首期使用 Redis Streams，后续可替换 Kafka</td></tr>
+          </tbody>
+        </table>
+        <p class="small">设计依据：LangGraph 官方文档将 State、持久化 checkpoint、节点级重试和 <code>interrupt()</code> 作为有状态 Agent 与人工介入的核心原语；FastAPI 提供异步 API 与流式响应能力。参考：<a href="https://docs.langchain.com/oss/python/langgraph/overview">LangGraph Overview</a>、<a href="https://docs.langchain.com/oss/python/langgraph/interrupts">LangGraph Interrupts</a>、<a href="https://fastapi.tiangolo.com/advanced/stream-data/">FastAPI Stream Data</a>。</p>
+      </section>
+
+      <section id="model">
+        <h2>5. 统一知识模型</h2>
+        <h3>5.1 核心实体</h3>
+        <table>
+          <thead><tr><th>域</th><th>实体</th><th>典型标识</th></tr></thead>
+          <tbody>
+            <tr><td>业务与产品</td><td>BusinessLine、Requirement、Capability、UserFlow、State、Permission</td><td>业务线编码、Jira Key、需求编号、稳定业务键</td></tr>
+            <tr><td>前端</td><td>Page、Route、Entry、Component、FeatureFlag</td><td>route、组件符号、代码路径</td></tr>
+            <tr><td>后端</td><td>API、Field、Protocol、Service、Method、Job、Cache</td><td>method + path、RPC service/method、symbol</td></tr>
+            <tr><td>数据</td><td>Database、Table、Column、Topic、Metric、TrackingEvent</td><td>catalog.schema.table.column、指标/埋点编码</td></tr>
+            <tr><td>交付</td><td>Repository、Commit、Build、Release、Environment、Experiment、Config</td><td>repo + commit SHA、发布单号、实验 key</td></tr>
+            <tr><td>知识</td><td>Document、Section、Decision、Incident、Ticket、Evidence</td><td>source URI + revision + fragment</td></tr>
+          </tbody>
+        </table>
+
+        <h3>5.2 关系语义</h3>
+        <p><code>AFFECTS</code>、<code>IMPLEMENTS</code>、<code>RENDERS</code>、<code>CALLS</code>、<code>READS</code>、<code>WRITES</code>、<code>EMITS</code>、<code>CONSUMES</code>、<code>GUARDED_BY</code>、<code>RELEASED_IN</code>、<code>OBSERVED_BY</code>、<code>DERIVED_FROM</code>、<code>SIMILAR_TO</code>。</p>
+        <pre>{
+  "edge_id": "edge_01H...",
+  "tenant_id": "acme",
+  "from": {"type": "Page", "id": "checkout"},
+  "relation": "CALLS",
+  "to": {"type": "API", "id": "POST /api/orders"},
+  "valid_from": "2026-09-01T00:00:00Z",
+  "valid_to": null,
+  "observed_at": "2026-10-11T01:20:00Z",
+  "confidence": 0.96,
+  "assertion_type": "STATIC_ANALYSIS",
+  "evidence_ids": ["ev_repo_sha_path_lines"],
+  "status": "VERIFIED"
+}</pre>
+        <p>实体采用 <strong>Identity + Revision</strong> 双层模型：稳定 ID 表示同一业务对象，Revision 表示某个时间点的属性快照。关系同样版本化，删除使用闭合 <code>valid_to</code>，不直接抹除历史。</p>
+
+        <h3>5.4 业务线作用域模型</h3>
+        <p>业务线不是自由文本标签，而是受治理的实体 <code>BusinessLine</code>。它具有稳定编码、名称、别名、父子层级、负责人、状态和可见范围。实体、文档切片、代码仓库/目录、图节点/边、会话及记忆均可关联一个或多个业务线。</p>
+        <ul>
+          <li><strong>多标签：</strong>共享服务、公共组件和跨域需求允许多个 <code>business_line_ids</code>，并记录主业务线与关联业务线。</li>
+          <li><strong>标签来源：</strong><code>EXPLICIT</code>（用户/管理员指定）、<code>RULE</code>（仓库、项目或目录映射）、<code>INHERITED</code>（从父对象传播）、<code>INFERRED</code>（模型推断）。</li>
+          <li><strong>可追溯：</strong>标签绑定包含来源、置信度、证据、创建者、时间和版本；推断结果不能覆盖人工确认标签。</li>
+          <li><strong>继承规则：</strong>Requirement 可从 Jira Project 继承，代码实体可从 repo/path 规则继承，文档切片默认继承文档标签；发生冲突时保留多标签并进入治理队列。</li>
+          <li><strong>权限关系：</strong>业务线负责缩小语义与记忆范围，ACL 决定用户是否能看。有效查询范围始终是 <code>业务线作用域 ∩ 用户授权范围</code>。</li>
+        </ul>
+
+        <h3>5.3 事实等级</h3>
+        <table>
+          <thead><tr><th>等级</th><th>来源</th><th>示例</th><th>默认可信度</th></tr></thead>
+          <tbody>
+            <tr><td>L1 确定事实</td><td>Schema、OpenAPI、编译/静态分析、Git、发布系统</td><td>字段存在、代码调用、commit 被发布</td><td>高</td></tr>
+            <tr><td>L2 观测事实</td><td>Trace、日志、指标、运行时流量</td><td>过去 24h 页面实际调用接口</td><td>高但受窗口影响</td></tr>
+            <tr><td>L3 声明事实</td><td>需求、方案、评审结论</td><td>文档声明将影响某页面</td><td>中，需验证是否落地</td></tr>
+            <tr><td>L4 模型推断</td><td>LLM/规则推断</td><td>根据命名和上下文判断可能相关</td><td>低到中，必须显式标注</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="pipeline">
+        <h2>6. 数据接入与索引流水线</h2>
+        <div class="flow"><span>发现变更</span><i>→</i><span>抓取原件</span><i>→</i><span>解析/标准化</span><i>→</i><span>实体对齐</span><i>→</i><span>关系抽取</span><i>→</i><span>版本化</span><i>→</i><span>多索引写入</span><i>→</i><span>质量校验</span><i>→</i><span>发布快照</span></div>
+
+        <h3>6.1 Connector 契约</h3>
+        <p>每个连接器实现 <code>discover</code>、<code>fetch</code>、<code>checkpoint</code>、<code>acl</code>、<code>health</code>，支持全量初始化和增量同步。源事件标准化为 <code>SourceChangeEvent</code>，以 <code>tenant + source + external_id + revision</code> 保证幂等。</p>
+        <table>
+          <thead><tr><th>数据源</th><th>主要抽取</th><th>增量键</th><th>重点关系</th></tr></thead>
+          <tbody>
+            <tr><td>Jira / 工单</td><td>需求、状态、负责人、版本、链接</td><td>updated_at / webhook</td><td>Requirement AFFECTS / LINKS / RELEASED_IN</td></tr>
+            <tr><td>飞书/企微文档</td><td>标题、段落、表格、评审结论、附件</td><td>document revision</td><td>Document DESCRIBES Decision/Requirement</td></tr>
+            <tr><td>Git 仓库</td><td>commit、diff、AST、符号、路由、API client、SQL</td><td>commit SHA</td><td>Component CALLS API；Method READS Table</td></tr>
+            <tr><td>OpenAPI / IDL</td><td>路径、方法、协议、字段、错误码</td><td>spec hash / version</td><td>API HAS_FIELD；Service IMPLEMENTS API</td></tr>
+            <tr><td>DB Schema</td><td>库、表、列、索引、约束、注释</td><td>schema snapshot hash</td><td>Table HAS_COLUMN；Method READS/WRITES</td></tr>
+            <tr><td>日志/APM/监控</td><td>trace 拓扑、错误模板、指标、告警</td><td>time window / cursor</td><td>Service CALLS；Error OBSERVED_BY Metric</td></tr>
+            <tr><td>发布/实验/配置</td><td>环境、版本、变更、灰度、开关</td><td>event sequence</td><td>Release DEPLOYS Commit；Capability GUARDED_BY</td></tr>
+          </tbody>
+        </table>
+
+        <h3>6.2 多索引写入策略</h3>
+        <ul>
+          <li><strong>先落原件：</strong>对象存储写不可变快照，生成 SHA-256；失败不推进 checkpoint。</li>
+          <li><strong>再落事实：</strong>关系库事务写实体、Revision、证据和 outbox；图、全文、向量、代码索引异步消费 outbox。</li>
+          <li><strong>最终一致：</strong>每条索引记录带 <code>knowledge_revision</code>。查询计划可要求最低 revision；索引延迟在答案中可见。</li>
+          <li><strong>可重建：</strong>派生索引都可由原件 + 关系库事实重放；Embedding 模型升级写新 namespace，不原地覆盖。</li>
+          <li><strong>删除传播：</strong>按 ACL 撤销或源删除事件关闭版本并删除派生索引，保留合规范围内的审计墓碑。</li>
+        </ul>
+
+        <h3>6.3 实体对齐与冲突</h3>
+        <p>优先使用强标识（Jira Key、OpenAPI operationId、repo+symbol、catalog path），其次使用可解释规则，最后才由模型提出候选。冲突进入待确认队列；未经确认的合并不得改变稳定实体 ID。</p>
+
+        <h3>6.4 业务线标签加工</h3>
+        <div class="flow"><span>显式源字段</span><i>→</i><span>项目/仓库规则</span><i>→</i><span>关系继承</span><i>→</i><span>分类模型补充</span><i>→</i><span>置信度与冲突校验</span><i>→</i><span>索引字段写入</span></div>
+        <p>所有存储适配器都必须支持业务线过滤：关系库使用关联表，图存储写入节点/边作用域，全文和向量索引写入可过滤 metadata，对象存储 manifest 与代码符号表保存标签。标签修正通过 outbox 传播到派生索引，并能够按 revision 重建。</p>
+
+        <h3>6.5 新语言与框架的渐进式适配</h3>
+        <p><strong>新语言默认可接入，不要求每种语言从零开发完整 Plugin。</strong>代码接入拆分为通用 Git Connector、Tree-sitter Grammar、语言查询包、语义索引适配器和框架规则五层；不支持深度语义的语言自动降级为文件、全文和向量检索。</p>
+        <table>
+          <thead><tr><th>等级</th><th>能力</th><th>新增语言所需工作</th></tr></thead>
+          <tbody>
+            <tr><td>L0 通用接入</td><td>Git、Commit、Diff、文件、全文与向量检索</td><td>无需语言 Plugin；按扩展名和内容识别</td></tr>
+            <tr><td>L1 语法结构</td><td>类、函数、方法、import/export、基础调用表达式</td><td>复用已有 Tree-sitter Grammar，增加声明式 Query Pack</td></tr>
+            <tr><td>L2 语义引用</td><td>跨文件 definition/reference、类型和较准确调用关系</td><td>接入 LSP、SCIP、LSIF 或语言原生编译器索引</td></tr>
+            <tr><td>L3 框架语义</td><td>路由、ORM、消息、依赖注入、Agent 节点等业务关系</td><td>增加 FastAPI、Spring、Next.js 等 Framework Rule/Plugin</td></tr>
+            <tr><td>L4 运行时验证</td><td>实际调用、流量、错误和动态绑定</td><td>接入 Trace、日志或运行时探针</td></tr>
+          </tbody>
+        </table>
+        <p>维护版本化 <code>GrammarRegistry</code>，记录语言扩展名、Grammar 仓库与版本、许可证、Query Pack 版本、成熟度和测试语料。成熟度分为 <code>CERTIFIED</code>、<code>VERIFIED</code>、<code>COMMUNITY</code>、<code>TEXT_ONLY</code>。第三方 Grammar 必须锁定 commit/hash 并经过恶意输入、解析错误率和性能测试后才能进入默认发行版。</p>
+        <pre>languages:
+  python:
+    extensions: [".py"]
+    grammar: "tree-sitter-python"
+    grammar_revision: "&lt;locked-commit&gt;"
+    query_pack: "python-v1"
+    maturity: "CERTIFIED"
+    semantic_adapter: "pyright"
+    frameworks: ["fastapi", "langgraph"]
+
+  unknown:
+    maturity: "TEXT_ONLY"
+    fallback: ["git", "fulltext", "vector"]</pre>
+        <div class="callout"><strong>Phase 01 备注：</strong>以 DeerFlow 为实验仓库，优先将 Python 与 TypeScript 做到 L1/L2，并为 FastAPI、LangGraph、Next.js 和常见 HTTP Client 增加 L3 规则。Java、Go 等新语言先以 L0/L1 接入，不阻塞数据导入；只有需要精确跨文件语义时再增加对应 Semantic Adapter。</div>
+      </section>
+
+      <section id="orchestration">
+        <h2>7. Agent 编排设计</h2>
+        <p>默认使用 <strong>LangGraph（Python）</strong>实现可恢复的状态图，由 FastAPI 创建 Run、注入用户与业务线作用域、订阅执行事件并处理人工确认。领域逻辑放在独立 Service 中，LangGraph Node 只负责调用、状态转换和路由。</p>
+        <h3>7.1 运行流程</h3>
+        <div class="flow"><span>问题与身份</span><i>→</i><span>业务线作用域解析</span><i>→</i><span>意图/风险识别</span><i>→</i><span>查询计划</span><i>→</i><span>工具并行执行</span><i>→</i><span>证据归一</span><i>→</i><span>冲突检测</span><i>→</i><span>结论合成</span><i>→</i><span>人工确认/输出</span></div>
+        <table>
+          <thead><tr><th>问题类型</th><th>首选工具</th><th>补充工具</th></tr></thead>
+          <tbody>
+            <tr><td>精确字段/接口/错误码查询</td><td>全文索引 + 结构化查询</td><td>代码符号检索</td></tr>
+            <tr><td>影响面与依赖分析</td><td>图遍历 + 版本过滤</td><td>代码引用、运行时 Trace、RAG</td></tr>
+            <tr><td>历史相似问题</td><td>向量 + BM25 混合召回</td><td>元数据过滤、图邻域重排</td></tr>
+            <tr><td>需求完整性审查</td><td>规则/Checklist + 结构化字段</td><td>历史相似需求、LLM 批判审查</td></tr>
+            <tr><td>排障</td><td>日志/指标/Trace 查询 + 发布/配置时间线</td><td>依赖图、相似事故召回</td></tr>
+          </tbody>
+        </table>
+
+        <h3>7.2 Planner 与执行器</h3>
+        <p>Planner 输出受 JSON Schema 约束的 <code>QueryPlan</code>，包含假设、时间范围、环境、实体锚点、工具步骤、预算和停止条件。Executor 只允许调用注册工具；每个工具返回统一 <code>EvidenceItem[]</code>，而不是自由文本。</p>
+        <pre>{
+  "intent": "CHANGE_IMPACT",
+  "scope": {
+    "business_lines": ["commerce-order"],
+    "scope_source": "USER_EXPLICIT",
+    "project": "commerce", "env": "prod", "as_of": "2026-10-11"
+  },
+  "anchors": [{"type": "API_FIELD", "value": "Order.discountAmount"}],
+  "steps": [
+    {"tool": "entity.resolve", "required": true},
+    {"tool": "graph.traverse", "direction": "both", "max_hops": 4},
+    {"tool": "code.references", "at_revision": "release/current"},
+    {"tool": "search.hybrid", "filters": {"doc_type": ["requirement", "design"]}}
+  ],
+  "human_gate": "REQUIRED_IF_HIGH_RISK_OR_LOW_CONFIDENCE"
+}</pre>
+
+        <h4>LangGraph 默认节点</h4>
+        <div class="flow"><span>resolve_scope</span><i>→</i><span>classify_intent</span><i>→</i><span>build_plan</span><i>→</i><span>execute_tools</span><i>→</i><span>normalize_evidence</span><i>→</i><span>detect_conflicts</span><i>→</i><span>score_confidence</span><i>→</i><span>human_gate</span><i>→</i><span>compose_answer</span></div>
+        <ul>
+          <li><code>resolve_scope</code> 必须先于任何记忆与知识检索，产出服务端验证过的 <code>effective_scope</code>。</li>
+          <li><code>execute_tools</code> 可按计划并行执行只读工具，但每个结果必须携带 Evidence Envelope。</li>
+          <li><code>human_gate</code> 使用 LangGraph <code>interrupt()</code> 暂停；FastAPI 确认接口以同一 <code>thread_id/run_id</code> 恢复。</li>
+          <li>每个可重试节点声明显式 retry policy；副作用工具使用幂等键，避免 checkpoint 恢复后重复执行。</li>
+        </ul>
+
+        <h4>Graph State 最小字段</h4>
+        <pre>class AnalysisState(TypedDict):
+    request_id: str
+    thread_id: str
+    user_context: UserContext
+    question: str
+    effective_scope: BusinessScope
+    intent: AnalysisIntent | None
+    plan: QueryPlan | None
+    evidence: list[EvidenceItem]
+    conflicts: list[EvidenceConflict]
+    confidence: ConfidenceResult | None
+    pending_confirmation: ConfirmationRequest | None
+    answer: AnalysisAnswer | None</pre>
+        <p>Graph State 保存结构化原始数据或稳定 ID，不保存拼好的 Prompt、数据库连接、凭证和无限增长的完整文档。大结果写入对象存储/证据库，State 仅保存引用。Checkpoint 与业务事实分库分表，并配置 TTL。</p>
+
+        <h3>7.3 工具与安全边界</h3>
+        <ul>
+          <li>查询类工具默认只读，参数化查询，限制 hop、时间窗口、返回量和执行时间。</li>
+          <li>源系统写入、创建工单、修改配置、触发发布均属于 Action Tool，必须显式授权并二次确认。</li>
+          <li>模型不能直接拼接数据库 SQL、日志查询或 shell 执行；由服务端 DSL 编译和策略校验。</li>
+          <li>模型输出中的实体必须经 resolver 绑定真实 ID；未绑定内容标记为“推测”。</li>
+          <li>达到工具预算、证据不足或证据冲突时停止扩张检索，转为报告不确定性或请求人工确认。</li>
+        </ul>
+
+        <h3>7.4 记忆设计</h3>
+        <p>会话短期记忆保存当前任务状态；用户偏好保存展示方式；经人工确认的知识修正进入治理工作流。对话内容不会自动晋升为组织事实，避免“聊天污染知识库”。</p>
+
+        <h3>7.5 业务线感知的交互与记忆隔离</h3>
+        <p><strong>每一轮提问都有独立的业务线作用域。</strong>用户可以主动设置，系统也可以根据问题中的实体、项目、仓库、接口、历史选项和用户可访问业务线进行推断。UI 在输入框附近持续展示当前作用域，回答头部再次标明，避免用户误以为系统正在查询全部数据。</p>
+        <table>
+          <thead><tr><th>交互状态</th><th>系统行为</th><th>记忆检索行为</th></tr></thead>
+          <tbody>
+            <tr><td>用户显式指定一个标签</td><td>本轮采用该标签，优先级最高；校验用户权限</td><td>只选择该业务线及获准公共域的历史记忆</td></tr>
+            <tr><td>用户显式指定多个标签</td><td>进入跨业务线模式，UI 明示作用域列表</td><td>按每条业务线分桶召回、配额平衡，再合并去重</td></tr>
+            <tr><td>系统高置信推断</td><td>自动应用并展示“推断：订单业务线”，允许一键修改</td><td>仅使用推断标签相关记忆，并记录推断证据</td></tr>
+            <tr><td>推断结果相近或低置信</td><td>不静默选择；让用户确认候选标签，或在无历史记忆模式下继续</td><td>确认前不注入业务线历史记忆</td></tr>
+            <tr><td>问题明确跨域</td><td>建立临时多标签作用域，逐域检索并标注来源</td><td>不把某一业务线记忆未经标注地带入另一业务线</td></tr>
+            <tr><td>用户本轮切换标签</td><td>立即生成新的 Turn Scope，不修改此前消息的作用域</td><td>重新检索新作用域记忆；旧作用域记忆不进入上下文</td></tr>
+          </tbody>
+        </table>
+
+        <h4>作用域解析优先级</h4>
+        <ol>
+          <li>本轮用户显式设置的标签；</li>
+          <li>问题中出现的强实体映射，例如 Jira Project、仓库、接口或页面的唯一归属；</li>
+          <li>当前会话上一轮已确认的标签，但只有在本轮没有切换信号时才继承；</li>
+          <li>分类模型根据文本和候选业务线推断；不得因为用户常用某业务线就忽略本轮明确实体。</li>
+        </ol>
+
+        <h4>记忆召回与写入</h4>
+        <pre>effective_scope = requested_business_lines
+                  ∩ user_allowed_business_lines
+
+memory_candidates = retrieve(
+  conversation_id = current_conversation,
+  business_line_ids OVERLAP effective_scope,
+  memory_status = "ACTIVE",
+  top_k = scoped_budget
+)
+
+context = rerank(memory_candidates, current_question)
+          + explicitly_pinned_global_preferences</pre>
+        <ul>
+          <li>每条长期/摘要记忆必须带 <code>business_line_ids</code>、<code>scope_source</code>、<code>scope_confidence</code> 和来源 Turn ID；没有标签的业务记忆默认不参与召回。</li>
+          <li>全局记忆仅允许保存语言、输出格式等非业务偏好，需使用白名单；业务事实不能标成 global 绕过隔离。</li>
+          <li>公共平台/基础设施记忆使用受治理的 <code>shared</code> 标签，并且只有与本轮问题语义相关、用户有权限时才加入。</li>
+          <li>生成会话摘要时按业务线分别摘要；跨域对话生成多个分区摘要，不生成混合业务事实摘要。</li>
+          <li>回答必须返回实际使用的业务线标签、标签来源、推断置信度以及记忆条数，支持用户发现和纠正串线。</li>
+        </ul>
+        <div class="callout warning"><strong>降级原则：</strong>宁可少用记忆，也不要跨业务线误用记忆。标签不确定时可以继续做无历史记忆的知识查询，但必须显式提示作用域尚未确认。</div>
+      </section>
+
+      <section id="chains">
+        <h2>8. 核心链路示例</h2>
+
+        <h3>8.1 接口字段变更影响分析</h3>
+        <ol>
+          <li>解析“删除 <code>Order.discountAmount</code>”并绑定 API schema 中的字段 Revision。</li>
+          <li>图谱反向遍历：字段 ← API ← 前端 API Client ← Component ← Page/Entry，同时遍历 Service → Method → Table、TrackingEvent、Experiment。</li>
+          <li>代码索引验证引用位置；Trace 验证生产环境实际调用；全文/向量召回相关需求与方案。</li>
+          <li>按“确定影响 / 可能影响 / 未发现影响”分组，列出路径、版本、证据与负责人。</li>
+          <li>若涉及支付、权限或数据破坏，强制人工确认；生成测试建议和兼容方案但不自动改代码。</li>
+        </ol>
+        <div class="callout"><strong>输出示例：</strong>“结算页价格卡片确定受影响（Page → Component → API Client → Field，代码引用 2 处，当前生产版本仍有流量）；订单列表可能受影响（历史方案提及但当前代码未发现引用）；建议先新增兼容字段并观察 7 天，再删除旧字段。”每条路径均可展开证据。</div>
+
+        <h3>8.2 需求完整性评审</h3>
+        <ol>
+          <li>按需求类型加载 Checklist：状态机、角色权限、空/错/弱网态、幂等、数据口径、埋点、监控、灰度、回滚。</li>
+          <li>结构化检查字段是否存在；语义检查正文是否有实质描述，而非仅出现关键词。</li>
+          <li>召回相似需求和相关事故，指出以往遗漏造成的问题。</li>
+          <li>输出“缺失、含糊、冲突、已覆盖”四类结果，问题项附引用和建议补充文本。</li>
+        </ol>
+
+        <h3>8.3 线上故障排查</h3>
+        <ol>
+          <li>确定症状、环境、租户、时间窗口与 SLO；从异常指标定位服务和接口。</li>
+          <li>沿运行时 Trace 与静态依赖图扩展上下游，关联同期发布、实验、配置和 Schema 变化。</li>
+          <li>查询错误模板和日志样本，召回相似事故；建立按时间排序的证据时间线。</li>
+          <li>对假设逐一给出支持证据和反证，推荐验证步骤；高风险操作只生成 Runbook 并请求确认。</li>
+        </ol>
+      </section>
+
+      <section id="api">
+        <h2>9. API 与服务边界</h2>
+        <table>
+          <thead><tr><th>服务</th><th>职责</th><th>不负责</th></tr></thead>
+          <tbody>
+            <tr><td>FastAPI Gateway / Auth</td><td>REST/OpenAPI、SSE、SSO、租户、配额、请求身份与业务线作用域</td><td>知识推理和长任务状态</td></tr>
+            <tr><td>Connector Service</td><td>源系统认证、增量抓取、checkpoint、webhook</td><td>跨源实体合并</td></tr>
+            <tr><td>Knowledge Pipeline</td><td>解析、抽取、对齐、版本、索引任务</td><td>在线回答</td></tr>
+            <tr><td>Knowledge Service</td><td>实体、关系、证据、时间点视图、统一 Storage Port</td><td>模型自由生成</td></tr>
+            <tr><td>Search Service</td><td>全文、向量、混合召回、重排、ACL filter</td><td>事实真值裁决</td></tr>
+            <tr><td>Code Intelligence</td><td>符号、引用、调用图、diff 影响、行级证据</td><td>生产运行时事实</td></tr>
+            <tr><td>LangGraph Agent Runtime</td><td>状态图、路由、计划、工具执行、checkpoint、证据合成、interrupt 人机协作</td><td>绕过权限直接访问存储或充当长期事实库</td></tr>
+            <tr><td>Governance Service</td><td>ACL、策略、审计、反馈、修正审批、保留策略</td><td>业务源数据编辑</td></tr>
+          </tbody>
+        </table>
+
+        <h3>9.1 外部 API（建议）</h3>
+        <pre>POST /api/v1/analyses                 # 发起分析，返回 analysis_id
+GET  /api/v1/analyses/{id}            # 状态、结论、证据、置信度
+GET  /api/v1/analyses/{id}/events     # SSE 流式进度
+POST /api/v1/analyses/{id}/confirm    # 人工确认/拒绝高风险步骤
+GET  /api/v1/business-lines            # 当前用户可选择的业务线及层级
+POST /api/v1/scope/infer               # 为本轮问题推断业务线候选
+PUT  /api/v1/conversations/{id}/scope  # 设置会话默认作用域（可被本轮覆盖）
+PUT  /api/v1/turns/{id}/scope          # 用户确认或修正本轮业务线标签
+GET  /api/v1/entities/{type}/{id}      # 实体当前或 as_of 视图
+GET  /api/v1/graph/paths               # 受限图路径查询
+POST /api/v1/search                     # exact / fulltext / semantic / hybrid
+POST /api/v1/feedback                   # 证据、实体、关系或结论反馈
+POST /api/v1/connectors/{id}/sync       # 触发同步（管理权限）</pre>
+        <p>发起分析时可传 <code>business_line_ids</code>；未传则触发作用域推断。所有 FastAPI 响应包含 <code>request_id</code>、<code>knowledge_revision</code>、<code>generated_at</code>、<code>as_of</code>、<code>effective_business_scope</code>、<code>scope_source</code>、<code>scope_confidence</code>、<code>memory_usage</code>、<code>evidence[]</code> 和权限裁剪提示。长任务映射为 LangGraph Run，异步执行，可恢复、可取消；SSE 使用稳定事件类型而不是透传框架内部对象。</p>
+
+        <pre>POST /api/v1/analyses
+{
+  "conversation_id": "conv_123",
+  "question": "修改优惠金额字段会影响哪些页面？",
+  "business_line_ids": ["commerce-order"],
+  "scope_mode": "EXPLICIT"
+}
+
+// 未显式传标签时，返回的作用域决策示例
+{
+  "effective_business_scope": ["commerce-order"],
+  "scope_source": "INFERRED",
+  "scope_confidence": 0.93,
+  "scope_evidence": ["entity:Order.discountAmount"],
+  "requires_scope_confirmation": false,
+  "memory_usage": {"selected": 4, "excluded_by_scope": 17}
+}</pre>
+
+        <h3>9.2 插件扩展协议</h3>
+        <p>Connector、Parser、Extractor、Storage、Tool、Evaluator 均以版本化接口注册。社区插件在独立进程/容器运行，声明网络、密钥和数据权限；核心进程不加载不受信任插件代码。</p>
+      </section>
+
+      <section id="evidence">
+        <h2>10. 置信度与证据机制</h2>
+        <h3>10.1 Evidence Envelope</h3>
+        <p>每个证据项至少包含：<code>source_type</code>、<code>source_uri</code>、<code>source_revision</code>、<code>fragment</code>（页/段落/文件行/查询窗口）、<code>content_hash</code>、<code>observed_at</code>、<code>valid_time</code>、<code>acl</code>、<code>extractor</code> 与 <code>assertion_type</code>。</p>
+
+        <h3>10.2 置信度不是模型自报概率</h3>
+        <p>最终评分由可解释特征计算，模型只负责识别命题与组织语言：</p>
+        <pre>confidence = calibration(
+  source_reliability × 0.28 +
+  evidence_directness × 0.22 +
+  cross_source_agreement × 0.18 +
+  freshness_and_version_match × 0.14 +
+  entity_resolution_quality × 0.10 +
+  runtime_validation × 0.08
+) - conflict_penalty - permission_blindspot_penalty</pre>
+        <table>
+          <thead><tr><th>区间</th><th>展示</th><th>行为</th></tr></thead>
+          <tbody>
+            <tr><td>≥ 0.85</td><td><span class="status yes">高置信</span></td><td>可给确定结论，同时保留证据与版本限定。</td></tr>
+            <tr><td>0.60—0.84</td><td><span class="status maybe">中置信</span></td><td>使用“很可能”，列出缺失验证项。</td></tr>
+            <tr><td>&lt; 0.60</td><td><span class="status no">低置信</span></td><td>不包装成结论；展示假设并建议补充数据/人工确认。</td></tr>
+          </tbody>
+        </table>
+        <p>置信度需要用标注集做校准（如 isotonic / Platt），分场景评估，不能用一个阈值覆盖影响分析与事故根因判断。</p>
+
+        <h3>10.3 引用与冲突</h3>
+        <ul>
+          <li>事实型句子必须绑定至少一个 Evidence ID；一条引用不应支撑超出其内容的结论。</li>
+          <li>文档与代码冲突时同时展示，并按时间、环境和事实等级解释；不得静默选择。</li>
+          <li>因权限不可见而无法完整分析时，显示“结果可能不完整”，但不泄露受限对象名称或数量。</li>
+          <li>答案快照保存所用证据 ID、查询计划、工具版本、模型版本和提示模板版本，支持复现。</li>
+        </ul>
+      </section>
+
+      <section id="security">
+        <h2>11. 权限、安全与治理</h2>
+        <div class="grid">
+          <div class="card"><h3>身份与授权</h3><p>OIDC/SAML SSO；RBAC 管管理动作，ABAC 控制项目、业务线、环境、密级与数据域；查询以用户身份或受限服务身份执行。</p></div>
+          <div class="card"><h3>数据隔离</h3><p>所有记录携带 tenant/project/ACL；数据库 RLS + 应用层双重校验；检索前过滤，不依赖生成后脱敏。</p></div>
+          <div class="card"><h3>密钥与加密</h3><p>连接器凭证进入 Secret Manager；传输 TLS、存储加密、密钥轮换；日志禁止记录 token 与完整敏感正文。</p></div>
+          <div class="card"><h3>提示注入防护</h3><p>源文档视作不可信数据；内容与指令通道隔离；工具白名单、参数校验、最小权限和结果净化。</p></div>
+          <div class="card"><h3>审计</h3><p>记录谁在何时查询了什么范围、调用哪些工具、引用哪些证据、做过何种确认；审计日志不可变并有保留期。</p></div>
+          <div class="card"><h3>知识治理</h3><p>实体合并、关系纠错、来源优先级、过期策略和删除请求均有审批流；修正可回滚且不覆盖原始证据。</p></div>
+        </div>
+        <h3>敏感场景门控</h3>
+        <p>生产写操作、权限策略建议、涉及个人信息的跨源关联、自动创建/修改外部事项，均进入 human-in-the-loop。模型供应商配置支持自托管、零数据保留 API 和按数据等级路由。</p>
+
+        <h3>11.1 业务线标签治理与防串线</h3>
+        <ul>
+          <li><strong>标签不是授权：</strong>即使用户主动选择某业务线，仍必须通过该业务线及底层数据对象的 ACL；错误标签不能扩大权限。</li>
+          <li><strong>候选不可泄密：</strong>作用域推断只在用户可见的业务线集合内返回名称；不得通过候选标签、计数或纠错信息暴露隐藏业务线。</li>
+          <li><strong>服务端强制过滤：</strong>Memory、Search、Graph、Code 和 Evidence 工具均接收不可省略的 <code>effective_scope</code>，由 Agent Runtime 签名传递；模型文本不能覆盖。</li>
+          <li><strong>全链路审计：</strong>记录本轮请求标签、有效标签、推断来源、用户修正、被排除记忆数量和各工具实际作用域。</li>
+          <li><strong>污染检测：</strong>离线扫描无标签记忆、异常 global 记忆、跨域摘要和标签漂移；发现后隔离而不是自动归并。</li>
+          <li><strong>删除与修正：</strong>用户可删除错误记忆或修正标签；修正产生新版本并异步清理旧索引，历史审计记录保留。</li>
+        </ul>
+      </section>
+
+      <section id="deployment">
+        <h2>12. 开源与一键部署</h2>
+        <h3>12.1 发行形态</h3>
+        <table>
+          <thead><tr><th>Profile</th><th>组件</th><th>适用规模</th></tr></thead>
+          <tbody>
+            <tr><td>Lite</td><td>FastAPI/LangGraph Worker + PostgreSQL/pgvector + MinIO</td><td>本地体验、单团队、低数据量</td></tr>
+            <tr><td>Default</td><td>Lite + OpenSearch + Redis Streams</td><td>社区默认、完整混合检索与后台任务</td></tr>
+            <tr><td>Scale</td><td>Default + ArangoDB/Neo4j + Qdrant + Kafka（按需）</td><td>多团队、大图谱、高吞吐；ArangoDB 需单独核对许可证</td></tr>
+          </tbody>
+        </table>
+        <p>提供 <code>docker compose up</code> 的默认路径和 Helm Chart 的生产路径；首次启动执行迁移、健康检查和示例项目导入。所有外部依赖均有 readiness probe、资源下限、备份恢复说明。</p>
+
+        <h3>12.2 配置与模型中立</h3>
+        <ul>
+          <li>通过环境变量/配置文件选择 LLM、Embedding、Reranker，提供 OpenAI-compatible adapter 与本地模型 adapter。</li>
+          <li>Connector SDK、领域 Schema、关系类型、Prompt/Evaluator 版本纳入仓库，避免核心能力锁在云服务。</li>
+          <li>数据迁移工具支持导出实体、边、证据和索引 manifest；向量可重算，不作为不可迁移资产。</li>
+          <li>默认关闭遥测；启用匿名遥测需明确 opt-in，不上传业务内容。</li>
+        </ul>
+
+        <h3>12.3 建议仓库结构</h3>
+        <pre>apps/            web, fastapi-api, worker
+packages/        domain-model, langgraph-runtime, connector-sdk, tool-sdk
+connectors/      jira, git, openapi, docs, db-schema, observability
+parsers/         document and language plugins
+deploy/          compose, helm, migrations, dashboards
+evals/           datasets, graders, regression suites
+docs/            architecture, operations, connector development</pre>
+      </section>
+
+      <section id="observability">
+        <h2>13. 可观测性与评测</h2>
+        <h3>13.1 系统指标</h3>
+        <p>采集延迟、解析失败率、索引 revision lag、实体重复率、孤立节点率、关系冲突率、查询 p50/p95、工具错误率、Token/模型成本、ACL 裁剪率和证据点击率。</p>
+        <h3>13.2 Agent 质量指标</h3>
+        <table>
+          <thead><tr><th>指标</th><th>定义</th><th>首期目标</th></tr></thead>
+          <tbody>
+            <tr><td>Evidence precision</td><td>引用是否真实支撑对应命题</td><td>≥ 95%</td></tr>
+            <tr><td>Impact recall</td><td>标注影响对象被发现的比例</td><td>按域建立基线，关键链路 ≥ 90%</td></tr>
+            <tr><td>Unsupported claim rate</td><td>无证据事实陈述比例</td><td>&lt; 2%</td></tr>
+            <tr><td>Temporal correctness</td><td>版本/时间点使用正确率</td><td>≥ 95%</td></tr>
+            <tr><td>Permission leakage</td><td>越权实体或内容泄露</td><td>0</td></tr>
+            <tr><td>Human acceptance</td><td>结论/建议被确认有用的比例</td><td>持续分场景提升</td></tr>
+          </tbody>
+        </table>
+        <p>建立 Gold Set：真实需求影响链、已知事故根因、接口变更、完整性缺陷和权限边界。每次 Schema、解析器、检索、模型或 Prompt 变更均跑离线回归；线上采用影子流量与人工抽检。</p>
+      </section>
+
+      <section id="roadmap">
+        <h2>14. 实施路线与待决策项</h2>
+        <table>
+          <thead><tr><th>阶段</th><th>目标</th><th>验收出口</th></tr></thead>
+          <tbody>
+            <tr><td>Phase 0：领域基线（2—3 周）</td><td>统一实体/边/证据 Schema；Storage Port；评测集框架</td><td>10 个手工标注链路可完整表达和回放</td></tr>
+            <tr><td>Phase 1：MVP（6—8 周）</td><td>FastAPI + LangGraph 运行时；Git、OpenAPI、Jira/文档接入；PostgreSQL/pgvector；影响分析和需求审查</td><td>单项目一键部署，支持流式回答与暂停恢复，答案具备行/段落级证据</td></tr>
+            <tr><td>Phase 2：运行时闭环（6—8 周）</td><td>发布、日志/APM、监控、配置/实验；OpenSearch；排障链路</td><td>可生成版本正确的故障时间线与验证步骤</td></tr>
+            <tr><td>Phase 3：规模化与生态</td><td>专用图/向量适配、插件市场、多租户、Helm、治理工作台</td><td>存储可替换，连接器 SDK 有兼容性测试</td></tr>
+          </tbody>
+        </table>
+
+        <h3>建议现在确认的技术决策</h3>
+        <ol>
+          <li><strong>应用技术栈：</strong>默认采用 Python 3.12、FastAPI、LangGraph 和 Pydantic；FastAPI 与 LangGraph 通过应用服务边界协作，不让 HTTP DTO 或框架 State 侵入领域模型。</li>
+          <li><strong>图存储起步：</strong>接受 PostgreSQL 关系图作为默认实现，同时从第一天定义 Graph Port；ArangoDB Community 作为可选 Adapter，不作为默认捆绑依赖，商业生产使用前核对许可证。</li>
+          <li><strong>全文检索：</strong>默认版引入 OpenSearch；Lite 版允许 PostgreSQL FTS 降级。</li>
+          <li><strong>向量检索：</strong>MVP 使用 pgvector，达到明确规模阈值再迁移 Qdrant/Milvus。</li>
+          <li><strong>代码智能：</strong>首期聚焦 Java/Go/TypeScript/Python，使用 Tree-sitter + 符号/引用表；后续接入 SCIP。</li>
+          <li><strong>事实政策：</strong>只有源系统事实、确定性解析结果或人工确认内容可进入 VERIFIED；模型抽取默认为 PROPOSED。</li>
+          <li><strong>部署基线：</strong>Docker Compose 为社区快速开始，Helm 为生产推荐；默认不要求 Kubernetes。</li>
+        </ol>
+
+        <div class="callout decision"><strong>架构结论：</strong>KnowItAll 应以“版本化知识图 + 多模态检索 + 证据驱动 Agent”为核心。RAG 是其中的语义召回能力，不是事实系统；Agent 是受权限和证据约束的查询计划执行器，不是直接对所有数据自由推理的聊天模型。</div>
+      </section>
+
+      <p class="footer">KnowItAll Agent Technical Design · Draft v0.1 · 可作为 ADR、Schema 设计与 MVP 拆解的上位文档</p>
+    </main>
+  </div>
+</body>
+</html>
